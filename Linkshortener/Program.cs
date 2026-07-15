@@ -22,13 +22,14 @@ namespace Linkshortener
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
             builder.Services.AddOpenApi();
             builder.Services.AddScoped<UrlShortenerService>();
-         
+
 
             builder.Services.AddStackExchangeRedisCache(options =>
             {
-                options.Configuration = "localhost:6379";
+                options.Configuration = "localhost:6379,abortConnect=false";
                 options.InstanceName = "LinkShortener_";
             });
+
             builder.Services.AddDbContext<AppDbContext>(Options =>
             Options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
             builder.Services.AddCors(options =>

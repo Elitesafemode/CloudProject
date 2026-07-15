@@ -29,11 +29,19 @@ namespace Linkshortener.Controllers
         public async Task<IActionResult> ShortenUrl([FromBody] UrlRequestDto request)
         {
             if (string.IsNullOrEmpty(request.OriginalUrl)) return BadRequest("آدرس نمی‌تواند خالی باشد.");
+
+            var urlToSave = request.OriginalUrl;
+            if (!urlToSave.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+                !urlToSave.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            {
+                urlToSave = "https://" + urlToSave;
+            }
+
             var shortCode = await _shortenerService.GenerateUniqueCodeAsync();
 
             var urlRecord = new UrlRecord
             {
-                OriginalUrl = request.OriginalUrl, 
+                OriginalUrl = urlToSave, 
                 ShortCode = shortCode,
                 CreatedAt = DateTime.UtcNow,
                 ClickCount = 0
@@ -47,47 +55,68 @@ namespace Linkshortener.Controllers
         }
 
 
-        [HttpGet("/{shortCode}")]
+
+
+
+        [HttpGet("/{shortCode:regex(^[[a-zA-Z0-9]]+$)}")]
         public async Task<IActionResult> RedirectToOriginal(string shortCode)
         {
-            string originalUrl;
-            var cachedUrl = await _cache.GetStringAsync(shortCode);
+            string cachedUrl = null;
+
+            try
+            {
+                cachedUrl = await _cache.GetStringAsync(shortCode);
+            }
+            catch (Exception)
+            {
+            }
+
+            if (!string.IsNullOrEmpty(cachedUrl))
+            {
+                var record = await _context.UrlRecords.FirstOrDefaultAsync(u => u.ShortCode == shortCode);
+                if (record != null)
+                {
+                    record.ClickCount++;
+                    await _context.SaveChangesAsync();
+                }
+                return Redirect(cachedUrl);
+            }
 
             var urlRecord = await _context.UrlRecords.FirstOrDefaultAsync(u => u.ShortCode == shortCode);
             if (urlRecord == null) return NotFound("لینک پیدا نشد!");
 
-            if (!string.IsNullOrEmpty(cachedUrl))
+            try
             {
-                originalUrl = cachedUrl;
-            }
-            else
-            {
-                originalUrl = urlRecord.OriginalUrl;
                 var cacheOptions = new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1) };
-                await _cache.SetStringAsync(shortCode, originalUrl, cacheOptions);
+                await _cache.SetStringAsync(shortCode, urlRecord.OriginalUrl, cacheOptions);
+            }
+            catch (Exception)
+            {
             }
 
             urlRecord.ClickCount++;
             await _context.SaveChangesAsync();
 
-            return Redirect(originalUrl);
+            return Redirect(urlRecord.OriginalUrl);
         }
+
 
         [HttpGet("links")]
         public async Task<IActionResult> GetAllLinks()
         {
-            var links = await _context.Urls
+            var links = await _context.UrlRecords 
                 .Select(u => new
                 {
                     shortCode = u.ShortCode,
                     originalUrl = u.OriginalUrl,
-                    clicks = u.ClickCount, // مپ کردن نام فیلد برای فرانت
-                    createdAt = u.CreatedAt.ToString("yyyy/MM/dd") // تبدیل تاریخ به فرمت مناسب
+                    clicks = u.ClickCount, 
+                    createdAt = u.CreatedAt.ToString("yyyy/MM/dd") 
                 })
                 .ToListAsync();
 
             return Ok(links);
         }
+
 
 
     }
