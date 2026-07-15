@@ -66,7 +66,7 @@ namespace Linkshortener
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 db.Database.Migrate();
             }
-
+            app.MapGet("/", () => "OK");
             app.Run();
         }
     }
