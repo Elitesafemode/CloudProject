@@ -62,7 +62,7 @@ namespace Linkshortener
             app.MapControllers();
 
         
-            app.MapGet("/", () => "OK");
+            //app.MapGet("/", () => "OK");
             app.Run();
         }
     }
